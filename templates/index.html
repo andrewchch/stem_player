@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stem Player</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+      }
+      .controls {
+        margin: 1rem 0;
+        display: flex;
+        gap: 0.5rem;
+      }
+      .stem {
+        border: 1px solid #ccc;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+      }
+      .stem-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .stem-name {
+        width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Stem Player</h1>
+
+    <form id="upload-form">
+      <input id="file-input" type="file" name="files" accept="audio/*" multiple />
+      <button type="submit">Upload</button>
+    </form>
+
+    <div class="controls">
+      <button id="play-all" type="button">Play</button>
+      <button id="pause-all" type="button">Pause</button>
+      <button id="stop-all" type="button">Stop</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="stems"></div>
+
+    <script>
+      const stemsContainer = document.getElementById("stems");
+      const statusEl = document.getElementById("status");
+      const players = [];
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function applyMixState() {
+        const hasSolo = players.some((p) => p.solo.checked);
+        players.forEach((player) => {
+          const volume = Number(player.volume.value);
+          const mutedBySolo = hasSolo && !player.solo.checked;
+          player.audio.volume = volume;
+          player.audio.muted = player.mute.checked || mutedBySolo;
+        });
+      }
+
+      async function loadStems() {
+        const response = await fetch("/api/stems");
+        const stems = await response.json();
+
+        players.length = 0;
+        stemsContainer.innerHTML = "";
+
+        if (stems.length === 0) {
+          stemsContainer.textContent = "No stems uploaded yet.";
+          return;
+        }
+
+        stems.forEach((stem) => {
+          const audio = new Audio(stem.url);
+          audio.preload = "metadata";
+
+          const wrapper = document.createElement("div");
+          wrapper.className = "stem";
+
+          const row = document.createElement("div");
+          row.className = "stem-row";
+
+          const name = document.createElement("span");
+          name.className = "stem-name";
+          name.textContent = stem.name;
+
+          const mute = document.createElement("input");
+          mute.type = "checkbox";
+          const muteLabel = document.createElement("label");
+          muteLabel.append("Mute ", mute);
+
+          const solo = document.createElement("input");
+          solo.type = "checkbox";
+          const soloLabel = document.createElement("label");
+          soloLabel.append("Solo ", solo);
+
+          const volume = document.createElement("input");
+          volume.type = "range";
+          volume.min = "0";
+          volume.max = "1";
+          volume.step = "0.01";
+          volume.value = "1";
+
+          [mute, solo, volume].forEach((el) =>
+            el.addEventListener("input", applyMixState)
+          );
+
+          row.append(name, muteLabel, soloLabel, volume);
+          wrapper.append(row);
+          stemsContainer.append(wrapper);
+
+          players.push({ audio, mute, solo, volume });
+        });
+
+        applyMixState();
+      }
+
+      document.getElementById("upload-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const files = document.getElementById("file-input").files;
+        if (!files.length) {
+          setStatus("Select at least one audio file to upload.");
+          return;
+        }
+
+        const formData = new FormData();
+        Array.from(files).forEach((file) => formData.append("files", file));
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          setStatus(data.error || "Upload failed");
+          return;
+        }
+
+        setStatus("Upload complete");
+        document.getElementById("file-input").value = "";
+        await loadStems();
+      });
+
+      document.getElementById("play-all").addEventListener("click", async () => {
+        const minTime = Math.min(...players.map((p) => p.audio.currentTime), 0);
+        for (const player of players) {
+          player.audio.currentTime = minTime;
+          await player.audio.play();
+        }
+      });
+
+      document.getElementById("pause-all").addEventListener("click", () => {
+        players.forEach((player) => player.audio.pause());
+      });
+
+      document.getElementById("stop-all").addEventListener("click", () => {
+        players.forEach((player) => {
+          player.audio.pause();
+          player.audio.currentTime = 0;
+        });
+      });
+
+      loadStems().catch(() => setStatus("Failed to load stems"));
+    </script>
+  </body>
+</html>
