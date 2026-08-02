@@ -9,6 +9,12 @@
         font-family: Arial, sans-serif;
         margin: 2rem;
       }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
       .controls {
         margin: 1rem 0;
         display: flex;
@@ -33,12 +39,17 @@
     </style>
   </head>
   <body>
-    <h1>Stem Player</h1>
+    <div class="toolbar">
+      <h1 style="margin:0">Stem Player</h1>
+      <a href="/admin"><button type="button">Admin</button></a>
+    </div>
 
-    <form id="upload-form">
-      <input id="file-input" type="file" name="files" accept="audio/*" multiple />
-      <button type="submit">Upload</button>
-    </form>
+    <div style="margin-bottom:1rem">
+      <label for="folder-select"><strong>Project folder:</strong></label>
+      <select id="folder-select">
+        <option value="">— select a folder —</option>
+      </select>
+    </div>
 
     <div class="controls">
       <button id="play-all" type="button">Play</button>
@@ -52,6 +63,7 @@
     <script>
       const stemsContainer = document.getElementById("stems");
       const statusEl = document.getElementById("status");
+      const folderSelect = document.getElementById("folder-select");
       const players = [];
 
       function setStatus(message) {
@@ -68,15 +80,37 @@
         });
       }
 
-      async function loadStems() {
-        const response = await fetch("/api/stems");
-        const stems = await response.json();
+      async function loadFolders() {
+        const response = await fetch("/api/folders");
+        const folders = await response.json();
+        while (folderSelect.options.length > 1) folderSelect.remove(1);
+        folders.forEach((name) => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          folderSelect.append(opt);
+        });
+      }
 
+      async function loadStems() {
+        const folder = folderSelect.value;
+        const url = folder ? `/api/stems?folder=${encodeURIComponent(folder)}` : "/api/stems";
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus(data.error || "Failed to load stems");
+          return;
+        }
+
+        const stems = data;
         players.length = 0;
         stemsContainer.innerHTML = "";
 
         if (stems.length === 0) {
-          stemsContainer.textContent = "No stems uploaded yet.";
+          stemsContainer.textContent = folder
+            ? "No audio files in this folder yet."
+            : "No stems uploaded yet.";
           return;
         }
 
@@ -125,32 +159,8 @@
         applyMixState();
       }
 
-      document.getElementById("upload-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const files = document.getElementById("file-input").files;
-        if (!files.length) {
-          setStatus("Select at least one audio file to upload.");
-          return;
-        }
-
-        const formData = new FormData();
-        Array.from(files).forEach((file) => formData.append("files", file));
-
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          setStatus(data.error || "Upload failed");
-          return;
-        }
-
-        setStatus("Upload complete");
-        document.getElementById("file-input").value = "";
-        await loadStems();
+      folderSelect.addEventListener("change", () => {
+        loadStems().catch(() => setStatus("Failed to load stems"));
       });
 
       document.getElementById("play-all").addEventListener("click", async () => {
@@ -172,7 +182,10 @@
         });
       });
 
-      loadStems().catch(() => setStatus("Failed to load stems"));
+      (async () => {
+        await loadFolders();
+        await loadStems();
+      })().catch(() => setStatus("Failed to load"));
     </script>
   </body>
 </html>
