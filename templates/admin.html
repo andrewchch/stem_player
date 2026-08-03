@@ -6,8 +6,27 @@
     <title>Stem Player – Admin</title>
     <style>
       body {
+        margin: 0;
+        min-height: 100vh;
         font-family: Arial, sans-serif;
-        margin: 2rem;
+        color: #f5f7fb;
+        background:
+          linear-gradient(rgba(3, 6, 10, 0.68), rgba(3, 6, 10, 0.86)),
+          url("/images/stem_player_background2.png") center center / cover fixed no-repeat;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .page-shell {
+        max-width: 1100px;
+        margin: 2rem auto;
+        padding: 1.5rem;
+        background: rgba(8, 12, 20, 0.78);
+        border: 1px solid rgba(74, 183, 255, 0.35);
+        border-radius: 1rem;
+        box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
       }
       .toolbar {
         display: flex;
@@ -15,28 +34,78 @@
         gap: 1rem;
         margin-bottom: 1rem;
       }
+      .toolbar h1,
+      strong,
+      label {
+        color: #f5f7fb;
+      }
+      .panel {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: rgba(13, 20, 31, 0.76);
+        border: 1px solid rgba(139, 105, 255, 0.24);
+        border-radius: 0.85rem;
+      }
+      button,
+      select,
+      input {
+        font: inherit;
+      }
+      button {
+        padding: 0.55rem 1rem;
+        color: #7ce7ff;
+        background: rgba(7, 16, 29, 0.92);
+        border: 1px solid #2dbdff;
+        border-radius: 999px;
+        box-shadow: 0 0 0.9rem rgba(45, 189, 255, 0.18);
+      }
+      button:hover:not(:disabled) {
+        color: #ff9fe8;
+        border-color: #ff7bd8;
+        box-shadow: 0 0 1rem rgba(255, 123, 216, 0.22);
+      }
+      select,
+      input[type="text"],
+      input[type="file"] {
+        padding: 0.55rem 0.75rem;
+        color: #f5f7fb;
+        background: rgba(5, 12, 22, 0.9);
+        border: 1px solid rgba(124, 231, 255, 0.35);
+        border-radius: 0.7rem;
+      }
       table {
         border-collapse: collapse;
         width: 100%;
         margin-top: 1rem;
+        background: rgba(11, 18, 28, 0.82);
+        border-radius: 0.8rem;
+        overflow: hidden;
       }
       th, td {
-        border: 1px solid #ccc;
+        border: 1px solid rgba(87, 201, 255, 0.18);
         padding: 0.5rem 0.75rem;
         text-align: left;
       }
       th {
-        background: #f0f0f0;
+        color: #7ce7ff;
+        background: rgba(16, 27, 42, 0.94);
       }
       #status {
         margin: 0.75rem 0;
-        color: #333;
+        color: #ffc76c;
       }
       .new-folder-row {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.5rem;
         align-items: center;
         margin-top: 0.5rem;
+      }
+      #no-files {
+        padding: 1rem;
+        background: rgba(13, 20, 31, 0.76);
+        border: 1px solid rgba(139, 105, 255, 0.24);
+        border-radius: 0.85rem;
       }
       button:disabled {
         opacity: 0.4;
@@ -45,42 +114,44 @@
     </style>
   </head>
   <body>
-    <div class="toolbar">
-      <h1 style="margin:0">Admin</h1>
-      <a href="/"><button type="button">← Player</button></a>
-    </div>
-
-    <div style="margin-bottom:1rem">
-      <label for="folder-select"><strong>Project folder:</strong></label>
-      <select id="folder-select">
-        <option value="">— select a folder —</option>
-      </select>
-      <div class="new-folder-row">
-        <input id="new-folder-name" type="text" placeholder="New folder name" />
-        <button id="create-folder-btn" type="button">Create folder</button>
+    <div class="page-shell">
+      <div class="toolbar">
+        <h1 style="margin:0">Admin</h1>
+        <a href="/"><button type="button">← Player</button></a>
       </div>
+
+      <div class="panel">
+        <label for="folder-select"><strong>Project folder:</strong></label>
+        <select id="folder-select">
+          <option value="">— select a folder —</option>
+        </select>
+        <div class="new-folder-row">
+          <input id="new-folder-name" type="text" placeholder="New folder name" />
+          <button id="create-folder-btn" type="button">Create folder</button>
+        </div>
+      </div>
+
+      <div id="upload-section" class="panel" style="display:none">
+        <form id="upload-form">
+          <input id="file-input" type="file" name="files" accept="audio/*" multiple />
+          <button type="submit">Upload to selected folder</button>
+        </form>
+      </div>
+
+      <div id="status"></div>
+
+      <table id="file-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Date Added</th>
+          </tr>
+        </thead>
+        <tbody id="file-tbody"></tbody>
+      </table>
+      <div id="no-files" style="display:none">No audio files in this folder yet.</div>
     </div>
-
-    <div id="upload-section" style="display:none">
-      <form id="upload-form">
-        <input id="file-input" type="file" name="files" accept="audio/*" multiple />
-        <button type="submit">Upload to selected folder</button>
-      </form>
-    </div>
-
-    <div id="status"></div>
-
-    <table id="file-table" style="display:none">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Size</th>
-          <th>Date Added</th>
-        </tr>
-      </thead>
-      <tbody id="file-tbody"></tbody>
-    </table>
-    <div id="no-files" style="display:none">No audio files in this folder yet.</div>
 
     <script>
       const folderSelect = document.getElementById("folder-select");

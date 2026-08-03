@@ -135,6 +135,11 @@ def serve_stem(filename: str):
     return send_from_directory(STEMS_DIR, filename, as_attachment=False)
 
 
+@app.get("/images/<path:filename>")
+def serve_image(filename: str):
+    return send_from_directory(BASE_DIR / "images", filename, as_attachment=False)
+
+
 if __name__ == "__main__":
     _ensure_stems_dir()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
