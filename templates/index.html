@@ -45,6 +45,14 @@
         opacity: 0.4;
         cursor: not-allowed;
       }
+      #playback-summary {
+        font-family: monospace;
+        font-size: 1rem;
+        color: #333;
+        min-width: 11ch;
+        display: inline-block;
+        line-height: 1;
+      }
     </style>
   </head>
   <body>
@@ -64,6 +72,7 @@
       <button id="play-all" type="button">Play</button>
       <button id="pause-all" type="button">Pause</button>
       <button id="stop-all" type="button">Stop</button>
+      <span id="playback-summary">00:00 / 00:00</span>
     </div>
 
     <div id="status"></div>
@@ -76,10 +85,50 @@
       const playBtn = document.getElementById("play-all");
       const pauseBtn = document.getElementById("pause-all");
       const stopBtn = document.getElementById("stop-all");
+      const summaryEl = document.getElementById("playback-summary");
       const players = [];
 
       // Track current playback state: 'stopped' | 'playing' | 'paused'
       let playState = "stopped";
+      let summaryInterval = null;
+
+      function formatTime(seconds) {
+        if (!isFinite(seconds) || seconds < 0) seconds = 0;
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+      }
+
+      function getTotalDuration() {
+        if (players.length === 0) return 0;
+        return Math.max(...players.map((p) => p.audio.duration || 0));
+      }
+
+      function getCurrentTime() {
+        if (players.length === 0) return 0;
+        return players[0].audio.currentTime || 0;
+      }
+
+      function updateSummary() {
+        summaryEl.textContent = formatTime(getCurrentTime()) + " / " + formatTime(getTotalDuration());
+      }
+
+      function startSummaryUpdates() {
+        stopSummaryUpdates();
+        summaryInterval = setInterval(updateSummary, 100);
+      }
+
+      function stopSummaryUpdates() {
+        if (summaryInterval !== null) {
+          clearInterval(summaryInterval);
+          summaryInterval = null;
+        }
+      }
+
+      function resetSummary() {
+        stopSummaryUpdates();
+        summaryEl.textContent = "00:00 / " + formatTime(getTotalDuration());
+      }
 
       function setStatus(message) {
         statusEl.textContent = message;
@@ -138,6 +187,7 @@
         players.length = 0;
         stemsContainer.innerHTML = "";
         playState = "stopped";
+        resetSummary();
         setStatus("Loading…");
         updateControls();
 
@@ -238,6 +288,7 @@
           await player.audio.play();
         }
         playState = "playing";
+        startSummaryUpdates();
         setStatus("");
         updateControls();
       });
@@ -245,9 +296,12 @@
       pauseBtn.addEventListener("click", () => {
         if (playState === "playing") {
           players.forEach((player) => player.audio.pause());
+          stopSummaryUpdates();
+          updateSummary();
           playState = "paused";
         } else if (playState === "paused") {
           players.forEach((player) => player.audio.play());
+          startSummaryUpdates();
           playState = "playing";
         }
         updateControls();
@@ -259,6 +313,7 @@
           player.audio.currentTime = 0;
         });
         playState = "stopped";
+        resetSummary();
         updateControls();
       });
 
@@ -267,6 +322,8 @@
         const allEnded = players.every((p) => p.audio.ended || p.audio.paused);
         if (allEnded) {
           playState = "stopped";
+          stopSummaryUpdates();
+          updateSummary();
           updateControls();
         }
       }
