@@ -138,5 +138,29 @@ class StemAppTestCase(unittest.TestCase):
         self.assertEqual(len(stems), 1)
 
 
+class DefaultStorageRootTestCase(unittest.TestCase):
+    def test_default_stems_dir_is_under_data(self):
+        """STEMS_DIR must default to /data/stems when STEMS_DIR env var is absent."""
+        import importlib
+        import os
+        import sys
+
+        # Remove any cached module and the env override so we test the true default.
+        env_backup = os.environ.pop("STEMS_DIR", None)
+        try:
+            # Reload the module without STEMS_DIR in the environment.
+            if "app" in sys.modules:
+                del sys.modules["app"]
+            import app as fresh_app
+            self.assertEqual(fresh_app.STEMS_DIR, Path("/data/stems"))
+        finally:
+            if env_backup is not None:
+                os.environ["STEMS_DIR"] = env_backup
+            # Restore original module state so other tests aren't affected.
+            if "app" in sys.modules:
+                del sys.modules["app"]
+            import app  # noqa: F401  – re-import to restore the module
+
+
 if __name__ == '__main__':
     unittest.main()
