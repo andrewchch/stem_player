@@ -119,6 +119,11 @@ class StemAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Admin', response.data)
 
+    def test_index_page_renders_playback_seek_bar(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="playback-seek"', response.data)
+
     def test_upload_replaces_existing_file(self):
         self.client.post(
             '/api/folders',

@@ -18,7 +18,13 @@
       .controls {
         margin: 1rem 0;
         display: flex;
+        align-items: center;
+        flex-wrap: wrap;
         gap: 0.5rem;
+      }
+      #playback-seek {
+        flex: 1 1 240px;
+        min-width: 180px;
       }
       .stem {
         border: 1px solid #ccc;
@@ -72,6 +78,16 @@
       <button id="play-all" type="button">Play</button>
       <button id="pause-all" type="button">Pause</button>
       <button id="stop-all" type="button">Stop</button>
+      <input
+        id="playback-seek"
+        type="range"
+        min="0"
+        max="0"
+        step="0.01"
+        value="0"
+        disabled
+        aria-label="Playback position"
+      />
       <span id="playback-summary">00:00 / 00:00</span>
     </div>
 
@@ -85,6 +101,7 @@
       const playBtn = document.getElementById("play-all");
       const pauseBtn = document.getElementById("pause-all");
       const stopBtn = document.getElementById("stop-all");
+      const seekEl = document.getElementById("playback-seek");
       const summaryEl = document.getElementById("playback-summary");
       const players = [];
 
@@ -109,8 +126,17 @@
         return players[0].audio.currentTime || 0;
       }
 
+      function syncSeekBar() {
+        const duration = getTotalDuration();
+        const currentTime = Math.min(getCurrentTime(), duration || 0);
+        seekEl.max = String(duration || 0);
+        seekEl.value = String(currentTime);
+        seekEl.disabled = players.length === 0 || duration <= 0;
+      }
+
       function updateSummary() {
         summaryEl.textContent = formatTime(getCurrentTime()) + " / " + formatTime(getTotalDuration());
+        syncSeekBar();
       }
 
       function startSummaryUpdates() {
@@ -128,6 +154,7 @@
       function resetSummary() {
         stopSummaryUpdates();
         summaryEl.textContent = "00:00 / " + formatTime(getTotalDuration());
+        syncSeekBar();
       }
 
       function setStatus(message) {
@@ -151,6 +178,21 @@
           stopBtn.disabled = false;
           pauseBtn.textContent = "Resume";
         }
+        seekEl.disabled = players.length === 0 || getTotalDuration() <= 0;
+      }
+
+      function seekTo(time) {
+        const duration = getTotalDuration();
+        const targetTime = Math.max(0, Math.min(time, duration || 0));
+        players.forEach((player) => {
+          const playerDuration = player.audio.duration;
+          if (isFinite(playerDuration) && playerDuration > 0) {
+            player.audio.currentTime = Math.min(targetTime, playerDuration);
+          } else {
+            player.audio.currentTime = targetTime;
+          }
+        });
+        updateSummary();
       }
 
       function applyMixState() {
@@ -252,15 +294,21 @@
 
           players.push({ audio, mute, solo, volume });
           audio.addEventListener("ended", onAudioEnded);
+          audio.addEventListener("loadedmetadata", updateSummary);
         });
 
         applyMixState();
+        updateSummary();
         setStatus(`${stems.length} file${stems.length !== 1 ? "s" : ""} loaded.`);
         updateControls();
       }
 
       folderSelect.addEventListener("change", () => {
         loadStems().catch(() => setStatus("Failed to load stems"));
+      });
+
+      seekEl.addEventListener("input", () => {
+        seekTo(Number(seekEl.value));
       });
 
       playBtn.addEventListener("click", async () => {
