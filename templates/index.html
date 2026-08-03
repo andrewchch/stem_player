@@ -36,6 +36,15 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      #status {
+        margin: 0.5rem 0;
+        color: #555;
+        min-height: 1.2em;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -64,10 +73,35 @@
       const stemsContainer = document.getElementById("stems");
       const statusEl = document.getElementById("status");
       const folderSelect = document.getElementById("folder-select");
+      const playBtn = document.getElementById("play-all");
+      const pauseBtn = document.getElementById("pause-all");
+      const stopBtn = document.getElementById("stop-all");
       const players = [];
+
+      // Track current playback state: 'stopped' | 'playing' | 'paused'
+      let playState = "stopped";
 
       function setStatus(message) {
         statusEl.textContent = message;
+      }
+
+      function updateControls() {
+        if (playState === "stopped") {
+          playBtn.disabled = players.length === 0;
+          pauseBtn.disabled = true;
+          stopBtn.disabled = true;
+          pauseBtn.textContent = "Pause";
+        } else if (playState === "playing") {
+          playBtn.disabled = true;
+          pauseBtn.disabled = false;
+          stopBtn.disabled = false;
+          pauseBtn.textContent = "Pause";
+        } else if (playState === "paused") {
+          playBtn.disabled = true;
+          pauseBtn.disabled = false;
+          stopBtn.disabled = false;
+          pauseBtn.textContent = "Resume";
+        }
       }
 
       function applyMixState() {
@@ -95,28 +129,41 @@
       async function loadStems() {
         const folder = folderSelect.value;
         const url = folder ? `/api/stems?folder=${encodeURIComponent(folder)}` : "/api/stems";
+
+        // Stop any current playback and reset state before loading
+        players.forEach((player) => {
+          player.audio.pause();
+          player.audio.currentTime = 0;
+        });
+        players.length = 0;
+        stemsContainer.innerHTML = "";
+        playState = "stopped";
+        setStatus("Loading…");
+        updateControls();
+
         const response = await fetch(url);
         const data = await response.json();
 
         if (!response.ok) {
           setStatus(data.error || "Failed to load stems");
+          updateControls();
           return;
         }
 
         const stems = data;
-        players.length = 0;
-        stemsContainer.innerHTML = "";
 
         if (stems.length === 0) {
           stemsContainer.textContent = folder
             ? "No audio files in this folder yet."
             : "No stems uploaded yet.";
+          setStatus("");
+          updateControls();
           return;
         }
 
         stems.forEach((stem) => {
           const audio = new Audio(stem.url);
-          audio.preload = "metadata";
+          audio.preload = "auto";
 
           const wrapper = document.createElement("div");
           wrapper.className = "stem";
@@ -154,35 +201,78 @@
           stemsContainer.append(wrapper);
 
           players.push({ audio, mute, solo, volume });
+          audio.addEventListener("ended", onAudioEnded);
         });
 
         applyMixState();
+        setStatus(`${stems.length} file${stems.length !== 1 ? "s" : ""} loaded.`);
+        updateControls();
       }
 
       folderSelect.addEventListener("change", () => {
         loadStems().catch(() => setStatus("Failed to load stems"));
       });
 
-      document.getElementById("play-all").addEventListener("click", async () => {
+      playBtn.addEventListener("click", async () => {
+        if (players.length === 0) return;
+        setStatus("Loading audio…");
+        playBtn.disabled = true;
+
+        // Wait for all audio to be ready enough to play
+        await Promise.all(
+          players.map(
+            (p) =>
+              new Promise((resolve) => {
+                if (p.audio.readyState >= 3) {
+                  resolve();
+                } else {
+                  p.audio.addEventListener("canplay", resolve, { once: true });
+                }
+              })
+          )
+        );
+
         const minTime = Math.min(...players.map((p) => p.audio.currentTime), 0);
         for (const player of players) {
           player.audio.currentTime = minTime;
           await player.audio.play();
         }
+        playState = "playing";
+        setStatus("");
+        updateControls();
       });
 
-      document.getElementById("pause-all").addEventListener("click", () => {
-        players.forEach((player) => player.audio.pause());
+      pauseBtn.addEventListener("click", () => {
+        if (playState === "playing") {
+          players.forEach((player) => player.audio.pause());
+          playState = "paused";
+        } else if (playState === "paused") {
+          players.forEach((player) => player.audio.play());
+          playState = "playing";
+        }
+        updateControls();
       });
 
-      document.getElementById("stop-all").addEventListener("click", () => {
+      stopBtn.addEventListener("click", () => {
         players.forEach((player) => {
           player.audio.pause();
           player.audio.currentTime = 0;
         });
+        playState = "stopped";
+        updateControls();
       });
 
+      // Detect when all audio ends naturally
+      function onAudioEnded() {
+        const allEnded = players.every((p) => p.audio.ended || p.audio.paused);
+        if (allEnded) {
+          playState = "stopped";
+          updateControls();
+        }
+      }
+
       (async () => {
+        updateControls();
         await loadFolders();
         await loadStems();
       })().catch(() => setStatus("Failed to load"));

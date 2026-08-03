@@ -38,6 +38,10 @@
         align-items: center;
         margin-top: 0.5rem;
       }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -191,24 +195,32 @@
           return;
         }
 
+        const submitBtn = event.target.querySelector("button[type='submit']");
+        submitBtn.disabled = true;
+        setStatus("Uploading…");
+
         const formData = new FormData();
         Array.from(files).forEach((file) => formData.append("files", file));
         formData.append("folder", folder);
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await response.json();
+        try {
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
 
-        if (!response.ok) {
-          setStatus(data.error || "Upload failed");
-          return;
+          if (!response.ok) {
+            setStatus(data.error || "Upload failed");
+            return;
+          }
+
+          setStatus(`Uploaded: ${data.uploaded.join(", ")}`);
+          document.getElementById("file-input").value = "";
+          await loadFiles();
+        } finally {
+          submitBtn.disabled = false;
         }
-
-        setStatus(`Uploaded: ${data.uploaded.join(", ")}`);
-        document.getElementById("file-input").value = "";
-        await loadFiles();
       });
 
       loadFolders().catch(() => setStatus("Failed to load folders"));
