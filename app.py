@@ -8,7 +8,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
-STEMS_DIR = Path(os.environ.get("STEMS_DIR", BASE_DIR / "stems"))
+STEMS_DIR = Path(os.environ.get("STEMS_DIR", "/data/stems"))
 ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg", "m4a", "flac", "aac"}
 
 app = Flask(__name__)
