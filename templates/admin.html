@@ -146,6 +146,7 @@
             <th>Name</th>
             <th>Size</th>
             <th>Date Added</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="file-tbody"></tbody>
@@ -217,7 +218,29 @@
           tdSize.textContent = formatSize(file.size);
           const tdDate = document.createElement("td");
           tdDate.textContent = formatDate(file.added);
-          tr.append(tdName, tdSize, tdDate);
+          const tdActions = document.createElement("td");
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            const folder = folderSelect.value;
+            if (!confirm(`Delete "${file.name}" from "${folder}"?`)) return;
+            deleteBtn.disabled = true;
+            const response = await fetch(
+              `/api/stems/${encodeURIComponent(folder)}/${encodeURIComponent(file.name)}`,
+              { method: "DELETE" }
+            );
+            const data = await response.json();
+            if (!response.ok) {
+              setStatus(data.error || "Failed to delete file");
+              deleteBtn.disabled = false;
+              return;
+            }
+            setStatus(`Deleted "${data.deleted}".`);
+            await loadFiles();
+          });
+          tdActions.append(deleteBtn);
+          tr.append(tdName, tdSize, tdDate, tdActions);
           fileTbody.append(tr);
         });
 

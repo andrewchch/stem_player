@@ -129,6 +129,31 @@ def upload_stems():
     return jsonify({"uploaded": uploaded})
 
 
+@app.delete("/api/stems/<folder>/<filename>")
+def delete_stem(folder: str, filename: str):
+    _ensure_stems_dir()
+    folder_path = _resolve_folder(folder)
+    if folder_path is None or not folder_path.is_dir():
+        return jsonify({"error": "Folder not found"}), 404
+
+    safe_filename = secure_filename(filename)
+    if not safe_filename or not _is_allowed_file(safe_filename):
+        return jsonify({"error": "Invalid filename"}), 400
+
+    file_path = folder_path / safe_filename
+    # Guard against path-traversal
+    try:
+        file_path.resolve().relative_to(folder_path.resolve())
+    except ValueError:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    if not file_path.is_file():
+        return jsonify({"error": "File not found"}), 404
+
+    file_path.unlink()
+    return jsonify({"deleted": safe_filename})
+
+
 @app.get("/stems/<path:filename>")
 def serve_stem(filename: str):
     _ensure_stems_dir()
