@@ -150,6 +150,50 @@ class StemAppTestCase(unittest.TestCase):
         stems = self.client.get('/api/stems?folder=proj').get_json()
         self.assertEqual(len(stems), 1)
 
+    # ---- delete stem tests ----
+
+    def test_delete_stem(self):
+        self.client.post(
+            '/api/folders',
+            data=json.dumps({'name': 'band'}),
+            content_type='application/json',
+        )
+        self.client.post(
+            '/api/upload',
+            data={
+                'files': (io.BytesIO(b'RIFF....WAVE'), 'bass.wav'),
+                'folder': 'band',
+            },
+            content_type='multipart/form-data',
+        )
+        response = self.client.delete('/api/stems/band/bass.wav')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['deleted'], 'bass.wav')
+        stems = self.client.get('/api/stems?folder=band').get_json()
+        self.assertEqual(stems, [])
+
+    def test_delete_stem_nonexistent_file(self):
+        self.client.post(
+            '/api/folders',
+            data=json.dumps({'name': 'band'}),
+            content_type='application/json',
+        )
+        response = self.client.delete('/api/stems/band/missing.wav')
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_stem_nonexistent_folder(self):
+        response = self.client.delete('/api/stems/nope/track.wav')
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_stem_invalid_extension(self):
+        self.client.post(
+            '/api/folders',
+            data=json.dumps({'name': 'band'}),
+            content_type='application/json',
+        )
+        response = self.client.delete('/api/stems/band/notes.txt')
+        self.assertEqual(response.status_code, 400)
+
 
 class DefaultStorageRootTestCase(unittest.TestCase):
     def test_default_stems_dir_is_under_data(self):
