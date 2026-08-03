@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stem Player – Admin</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 1rem;
+      }
+      th, td {
+        border: 1px solid #ccc;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+      }
+      th {
+        background: #f0f0f0;
+      }
+      #status {
+        margin: 0.75rem 0;
+        color: #333;
+      }
+      .new-folder-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-top: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <h1 style="margin:0">Admin</h1>
+      <a href="/"><button type="button">← Player</button></a>
+    </div>
+
+    <div style="margin-bottom:1rem">
+      <label for="folder-select"><strong>Project folder:</strong></label>
+      <select id="folder-select">
+        <option value="">— select a folder —</option>
+      </select>
+      <div class="new-folder-row">
+        <input id="new-folder-name" type="text" placeholder="New folder name" />
+        <button id="create-folder-btn" type="button">Create folder</button>
+      </div>
+    </div>
+
+    <div id="upload-section" style="display:none">
+      <form id="upload-form">
+        <input id="file-input" type="file" name="files" accept="audio/*" multiple />
+        <button type="submit">Upload to selected folder</button>
+      </form>
+    </div>
+
+    <div id="status"></div>
+
+    <table id="file-table" style="display:none">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Size</th>
+          <th>Date Added</th>
+        </tr>
+      </thead>
+      <tbody id="file-tbody"></tbody>
+    </table>
+    <div id="no-files" style="display:none">No audio files in this folder yet.</div>
+
+    <script>
+      const folderSelect = document.getElementById("folder-select");
+      const statusEl = document.getElementById("status");
+      const fileTable = document.getElementById("file-table");
+      const fileTbody = document.getElementById("file-tbody");
+      const noFiles = document.getElementById("no-files");
+      const uploadSection = document.getElementById("upload-section");
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function formatDate(isoString) {
+        return new Date(isoString).toLocaleString();
+      }
+
+      async function loadFolders() {
+        const response = await fetch("/api/folders");
+        const folders = await response.json();
+        while (folderSelect.options.length > 1) folderSelect.remove(1);
+        folders.forEach((name) => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          folderSelect.append(opt);
+        });
+      }
+
+      async function loadFiles() {
+        const folder = folderSelect.value;
+        fileTbody.innerHTML = "";
+        fileTable.style.display = "none";
+        noFiles.style.display = "none";
+        uploadSection.style.display = folder ? "block" : "none";
+
+        if (!folder) return;
+
+        const response = await fetch(`/api/stems?folder=${encodeURIComponent(folder)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus(data.error || "Failed to load files");
+          return;
+        }
+
+        if (data.length === 0) {
+          noFiles.style.display = "block";
+          return;
+        }
+
+        data.forEach((file) => {
+          const tr = document.createElement("tr");
+          const tdName = document.createElement("td");
+          tdName.textContent = file.name;
+          const tdSize = document.createElement("td");
+          tdSize.textContent = formatSize(file.size);
+          const tdDate = document.createElement("td");
+          tdDate.textContent = formatDate(file.added);
+          tr.append(tdName, tdSize, tdDate);
+          fileTbody.append(tr);
+        });
+
+        fileTable.style.display = "table";
+      }
+
+      folderSelect.addEventListener("change", () => {
+        setStatus("");
+        loadFiles().catch(() => setStatus("Failed to load files"));
+      });
+
+      document.getElementById("create-folder-btn").addEventListener("click", async () => {
+        const name = document.getElementById("new-folder-name").value.trim();
+        if (!name) {
+          setStatus("Enter a folder name.");
+          return;
+        }
+        const response = await fetch("/api/folders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setStatus(data.error || "Failed to create folder");
+          return;
+        }
+        document.getElementById("new-folder-name").value = "";
+        setStatus(`Folder "${data.name}" created.`);
+        await loadFolders();
+        folderSelect.value = data.name;
+        await loadFiles();
+      });
+
+      document.getElementById("upload-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const folder = folderSelect.value;
+        if (!folder) {
+          setStatus("Select a folder before uploading.");
+          return;
+        }
+
+        const files = document.getElementById("file-input").files;
+        if (!files.length) {
+          setStatus("Select at least one audio file to upload.");
+          return;
+        }
+
+        const formData = new FormData();
+        Array.from(files).forEach((file) => formData.append("files", file));
+        formData.append("folder", folder);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus(data.error || "Upload failed");
+          return;
+        }
+
+        setStatus(`Uploaded: ${data.uploaded.join(", ")}`);
+        document.getElementById("file-input").value = "";
+        await loadFiles();
+      });
+
+      loadFolders().catch(() => setStatus("Failed to load folders"));
+    </script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
@@ -21,19 +22,77 @@ def _ensure_stems_dir() -> None:
     STEMS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _resolve_folder(folder: str) -> Path | None:
+    """Return the resolved path for *folder* under STEMS_DIR, or None if invalid."""
+    safe = secure_filename(folder)
+    if not safe:
+        return None
+    resolved = (STEMS_DIR / safe).resolve()
+    # Guard against path-traversal
+    try:
+        resolved.relative_to(STEMS_DIR.resolve())
+    except ValueError:
+        return None
+    return resolved
+
+
 @app.get("/")
 def index():
     _ensure_stems_dir()
     return render_template("index.html")
 
 
+@app.get("/admin")
+def admin():
+    _ensure_stems_dir()
+    return render_template("admin.html")
+
+
+@app.get("/api/folders")
+def list_folders():
+    _ensure_stems_dir()
+    folders = sorted(
+        p.name for p in STEMS_DIR.iterdir() if p.is_dir()
+    )
+    return jsonify(folders)
+
+
+@app.post("/api/folders")
+def create_folder():
+    _ensure_stems_dir()
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "")
+    folder_path = _resolve_folder(name)
+    if folder_path is None:
+        return jsonify({"error": "Invalid folder name"}), 400
+    folder_path.mkdir(exist_ok=True)
+    return jsonify({"name": folder_path.name})
+
+
 @app.get("/api/stems")
 def list_stems():
     _ensure_stems_dir()
+    folder_name = request.args.get("folder", "")
+    if folder_name:
+        folder_path = _resolve_folder(folder_name)
+        if folder_path is None or not folder_path.is_dir():
+            return jsonify({"error": "Folder not found"}), 404
+        search_dir = folder_path
+        url_prefix = f"/stems/{folder_path.name}/"
+    else:
+        search_dir = STEMS_DIR
+        url_prefix = "/stems/"
+
     stems = []
-    for file_path in sorted(STEMS_DIR.iterdir()):
+    for file_path in sorted(search_dir.iterdir()):
         if file_path.is_file() and _is_allowed_file(file_path.name):
-            stems.append({"name": file_path.name, "url": f"/stems/{file_path.name}"})
+            stat = file_path.stat()
+            stems.append({
+                "name": file_path.name,
+                "url": f"{url_prefix}{file_path.name}",
+                "size": stat.st_size,
+                "added": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            })
     return jsonify(stems)
 
 
@@ -44,6 +103,15 @@ def upload_stems():
     if not files:
         return jsonify({"error": "No files provided"}), 400
 
+    folder_name = request.form.get("folder", "")
+    if folder_name:
+        folder_path = _resolve_folder(folder_name)
+        if folder_path is None or not folder_path.is_dir():
+            return jsonify({"error": "Folder not found"}), 404
+        save_dir = folder_path
+    else:
+        save_dir = STEMS_DIR
+
     uploaded = []
     for file in files:
         filename = secure_filename(file.filename or "")
@@ -51,7 +119,7 @@ def upload_stems():
             continue
         if not _is_allowed_file(filename):
             continue
-        save_path = STEMS_DIR / filename
+        save_path = save_dir / filename
         file.save(save_path)
         uploaded.append(filename)
 
