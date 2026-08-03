@@ -118,11 +118,19 @@ class StemAppTestCase(unittest.TestCase):
         response = self.client.get('/admin')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Admin', response.data)
+        self.assertIn(b'/images/stem_player_background2.png', response.data)
 
     def test_index_page_renders_playback_seek_bar(self):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="playback-seek"', response.data)
+        self.assertIn(b'/images/stem_player_background2.png', response.data)
+
+    def test_background_image_is_served(self):
+        response = self.client.get('/images/stem_player_background2.png')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'image/png')
+        response.close()
 
     def test_upload_replaces_existing_file(self):
         self.client.post(
