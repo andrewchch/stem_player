@@ -110,6 +110,36 @@
         color: #7ce7ff;
         font-weight: 600;
       }
+      .btn-mute,
+      .btn-solo {
+        width: 2rem;
+        height: 2rem;
+        border: none;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .btn-mute {
+        background: #888;
+        color: #8b0000;
+      }
+      .btn-mute.active {
+        background: #8b0000;
+        color: #333;
+      }
+      .btn-solo {
+        background: #888;
+        color: #ffd700;
+      }
+      .btn-solo.active {
+        background: #ffd700;
+        color: #333;
+      }
       #status {
         margin: 0.5rem 0;
         color: #ffc76c;
@@ -266,12 +296,12 @@
       }
 
       function applyMixState() {
-        const hasSolo = players.some((p) => p.solo.checked);
+        const hasSolo = players.some((p) => p.solo.classList.contains("active"));
         players.forEach((player) => {
           const volume = Number(player.volume.value);
-          const mutedBySolo = hasSolo && !player.solo.checked;
+          const mutedBySolo = hasSolo && !player.solo.classList.contains("active");
           player.audio.volume = volume;
-          player.audio.muted = player.mute.checked || mutedBySolo;
+          player.audio.muted = player.mute.classList.contains("active") || mutedBySolo;
         });
       }
 
@@ -337,15 +367,23 @@
           name.className = "stem-name";
           name.textContent = stem.name;
 
-          const mute = document.createElement("input");
-          mute.type = "checkbox";
-          const muteLabel = document.createElement("label");
-          muteLabel.append("Mute ", mute);
+          const mute = document.createElement("button");
+          mute.type = "button";
+          mute.className = "btn-mute";
+          mute.textContent = "M";
+          mute.addEventListener("click", () => {
+            mute.classList.toggle("active");
+            applyMixState();
+          });
 
-          const solo = document.createElement("input");
-          solo.type = "checkbox";
-          const soloLabel = document.createElement("label");
-          soloLabel.append("Solo ", solo);
+          const solo = document.createElement("button");
+          solo.type = "button";
+          solo.className = "btn-solo";
+          solo.textContent = "S";
+          solo.addEventListener("click", () => {
+            solo.classList.toggle("active");
+            applyMixState();
+          });
 
           const volume = document.createElement("input");
           volume.type = "range";
@@ -354,11 +392,9 @@
           volume.step = "0.01";
           volume.value = "1";
 
-          [mute, solo, volume].forEach((el) =>
-            el.addEventListener("input", applyMixState)
-          );
+          volume.addEventListener("input", applyMixState);
 
-          row.append(name, muteLabel, soloLabel, volume);
+          row.append(name, mute, solo, volume);
           wrapper.append(row);
           stemsContainer.append(wrapper);
 
